@@ -8,6 +8,7 @@ type Film = {
   title: string;
   synopsis: string;
   team: string;
+  members: string[];
   category: string;
   duration: number;
   size: number;
@@ -45,6 +46,7 @@ type ApiResponse = {
   title: string;
   synopsis: string;
   team: string;
+  members: string[];
   category: string;
   duration: number;
   error?: string;
@@ -208,6 +210,7 @@ export default function Home() {
       title: "",
       synopsis: "",
       team: "",
+      members: ["", ""],
       category: "Sociedade",
     }),
     [file, setFile] = useState<File | null>(null),
@@ -331,6 +334,7 @@ export default function Home() {
         title: d.title,
         synopsis: d.synopsis,
         team: d.team,
+        members: d.members?.length ? d.members : ["", ""],
         category: d.category,
       });
       setProgress(
@@ -529,7 +533,13 @@ export default function Home() {
     setProgress(0);
     setUploadState("idle");
     setFile(null);
-    setForm({ title: "", synopsis: "", team: "", category: "Sociedade" });
+    setForm({
+      title: "",
+      synopsis: "",
+      team: "",
+      members: ["", ""],
+      category: "Sociedade",
+    });
     setConsent(false);
     setUploadError("");
   }
@@ -537,7 +547,7 @@ export default function Home() {
     .filter(
       (f) =>
         (category === "Todos" || f.category === category) &&
-        `${f.title} ${f.team} ${f.synopsis}`
+        `${f.title} ${f.team} ${(f.members || []).join(" ")} ${f.synopsis}`
           .toLocaleLowerCase("pt-BR")
           .includes(search.toLocaleLowerCase("pt-BR")),
     )
@@ -806,7 +816,12 @@ export default function Home() {
                           {film.title}
                         </button>
                       </h3>
-                      <p className="film-team">{film.team}</p>
+                      <p className="film-team">
+                        {film.team}
+                        {film.members?.length
+                          ? ` · ${film.members.length} integrantes`
+                          : ""}
+                      </p>
                       <div className="film-rating">
                         <Icon name="star" size={16} />
                         <strong>
@@ -879,7 +894,7 @@ export default function Home() {
                   [
                     "02",
                     "Compartilhe seu olhar",
-                    "Envie seu MP4 de até 50 GB, com título, sinopse e nome da equipe.",
+                    "Envie seu MP4 de até 50 GB, com título, sinopse, nome do grupo e todos os integrantes.",
                   ],
                   [
                     "03",
@@ -909,8 +924,9 @@ export default function Home() {
               Compartilhe seu <em>olhar.</em>
             </h1>
             <p className="page-intro">
-              Seu documentário merece encontrar o público. Preencha os dados,
-              envie o vídeo e pronto.
+              Uma pessoa representa o grupo no cadastro e no envio. Informe o
+              nome do grupo e de todos os alunos, preencha os dados do
+              documentário e envie o vídeo.
             </p>
             {uploadState === "done" ? (
               <div className="success-panel">
@@ -968,19 +984,84 @@ export default function Home() {
                       />
                     </label>
                     <label>
-                      Equipe / autoria
+                      Nome do grupo
                       <input
                         required
                         minLength={2}
-                        maxLength={300}
+                        maxLength={120}
                         disabled={!!uploadId || busy}
                         value={form.team}
                         onChange={(e) =>
                           setForm({ ...form, team: e.target.value })
                         }
-                        placeholder="Nome dos alunos ou da equipe"
+                        placeholder="Ex.: Conexão TI"
                       />
                     </label>
+                    <fieldset
+                      className="group-members"
+                      disabled={!!uploadId || busy}
+                    >
+                      <legend>
+                        Integrantes do grupo{" "}
+                        <span>({form.members.length})</span>
+                      </legend>
+                      <p>
+                        Adicione o nome completo de todos os alunos. Os nomes
+                        serão exibidos junto ao documentário.
+                      </p>
+                      {form.members.map((name, index) => (
+                        <div className="member-row" key={index}>
+                          <label>
+                            Aluno {index + 1}
+                            <input
+                              required
+                              minLength={3}
+                              maxLength={120}
+                              value={name}
+                              placeholder="Nome completo do aluno"
+                              autoComplete="off"
+                              onChange={(e) =>
+                                setForm({
+                                  ...form,
+                                  members: form.members.map((item, i) =>
+                                    i === index ? e.target.value : item,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          {form.members.length > 2 && (
+                            <button
+                              type="button"
+                              className="remove-member"
+                              aria-label={"Remover aluno " + (index + 1)}
+                              onClick={() =>
+                                setForm({
+                                  ...form,
+                                  members: form.members.filter(
+                                    (_, i) => i !== index,
+                                  ),
+                                })
+                              }
+                            >
+                              <Icon name="close" size={18} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        className="button outline compact"
+                        type="button"
+                        disabled={
+                          !!uploadId || busy || form.members.length >= 50
+                        }
+                        onClick={() =>
+                          setForm({ ...form, members: [...form.members, ""] })
+                        }
+                      >
+                        + Adicionar integrante
+                      </button>
+                    </fieldset>
                     <label>
                       Categoria
                       <select
@@ -1058,8 +1139,8 @@ export default function Home() {
                       />
                       <span>
                         Tenho autorização para publicar este documentário e
-                        estou ciente de que o vídeo, a sinopse e a autoria
-                        ficarão públicos.
+                        estou ciente de que o vídeo, a sinopse, o grupo e os
+                        nomes de todos os integrantes ficarão públicos.
                       </span>
                     </label>
                     {uploadState !== "idle" && (
@@ -1141,7 +1222,9 @@ export default function Home() {
                     <li>Use MP4 com H.264 e áudio AAC.</li>
                     <li>Confira o som e os créditos finais.</li>
                     <li>Inclua legendas no vídeo, se possível.</li>
-                    <li>Revise a sinopse e os nomes da equipe.</li>
+                    <li>
+                      Confira a sinopse e os nomes de todos os integrantes.
+                    </li>
                   </ul>
                   <small>
                     O arquivo original fica disponível para reprodução. Não há
@@ -1279,7 +1362,20 @@ export default function Home() {
                   {selected.film.category} · {minutes(selected.film.duration)}
                 </div>
                 <h2>{selected.film.title}</h2>
-                <p className="byline">Por {selected.film.team}</p>
+                <p className="byline">Grupo: {selected.film.team}</p>
+                {selected.film.members?.length > 0 && (
+                  <section
+                    className="film-members"
+                    aria-label="Integrantes do grupo"
+                  >
+                    <h3>Integrantes do grupo</h3>
+                    <ul>
+                      {selected.film.members.map((name, index) => (
+                        <li key={index}>{name}</li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
                 <p className="synopsis">{selected.film.synopsis}</p>
               </div>
               <div className="rating-box">

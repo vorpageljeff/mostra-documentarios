@@ -76,3 +76,7 @@ O projeto começou sem filmes demonstrativos na produção. A arte gráfica da i
 ## Publicação separada
 
 Vercel: projeto `mostra-donaduzzi`, equipe `vorpageljeffs-projects`, build `npm run build:frontend`, saída `dist-frontend`, Node 22. O frontend é estático; o backend não roda na Vercel. O backend continua no mesmo project_id Sites, com seus bindings e dados preservados. Ao alterar o domínio, ajuste `FRONTEND_ORIGINS` em `lib/api.ts` e o atributo `data-api-base` em `frontend/index.html` conforme necessário. Os seis testes extras de integração cobrem preflight CORS, login cross-origin, token Bearer, logout e rejeição de origem não autorizada.
+
+## Inscrição em grupo
+
+Um integrante cria a conta e representa o grupo no envio. Cada inscrição exige o nome do grupo e uma lista de 2 a 50 alunos, com campos individuais para o nome completo. É possível adicionar e remover campos antes de iniciar o upload. Nomes vazios ou repetidos são rejeitados no servidor. O grupo e todos os integrantes aparecem na página do documentário; a busca também encontra nomes de integrantes. A lista é preservada ao retomar o envio. A migração `0001_bent_catseye.sql` adiciona um campo nullable, mantendo documentários anteriores compatíveis. A restrição de avaliar o próprio filme continua vinculada à conta responsável pelo envio; nomes de integrantes não são vinculados automaticamente a outras contas.

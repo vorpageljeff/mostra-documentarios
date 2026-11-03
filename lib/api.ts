@@ -149,7 +149,7 @@ async function loginResponse(
   );
 }
 const publicColumns =
-  "f.id,f.title,f.synopsis,f.team,f.category,f.duration,f.size,f.createdAt";
+  "f.id,f.title,f.synopsis,f.team,f.members,f.category,f.duration,f.size,f.createdAt";
 async function owned(req: Request, env: Env, id: string) {
   const u = await user(req, env);
   const f = await env.DB.prepare("SELECT * FROM films WHERE id=? AND userId=?")
@@ -164,7 +164,10 @@ async function list(env: Env, where = "f.status='ready'", params: any[] = []) {
   )
     .bind(...params)
     .all();
-  return results;
+  return results.map((film: any) => ({
+    ...film,
+    members: film.members ? JSON.parse(film.members) : [],
+  }));
 }
 async function handleRequest(req: Request, env: Env): Promise<Response> {
   try {
@@ -271,7 +274,7 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
       const b = await body(req);
       const title = field(b.title, 3, 120, "Título"),
         synopsis = field(b.synopsis, 20, 2000, "Sinopse"),
-        team = field(b.team, 2, 300, "Equipe"),
+        team = field(b.team, 2, 120, "Nome do grupo"),
         category = field(b.category, 2, 50, "Categoria"),
         filename = field(b.filename, 5, 255, "Arquivo"),
         fingerprint = field(b.fingerprint, 64, 64, "Identificação do arquivo");
@@ -291,6 +294,26 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
         );
       if (b.publishConsent !== true)
         throw new ApiError("Confirme a autorização de publicação.");
+      if (
+        !Array.isArray(b.members) ||
+        b.members.length < 2 ||
+        b.members.length > 50
+      )
+        throw new ApiError("Adicione de 2 a 50 integrantes ao grupo.");
+      const members = b.members.map((name: unknown) =>
+        field(name, 3, 120, "Nome completo do integrante"),
+      );
+      const normalized = members.map((name: string) =>
+        name
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/\s+/g, " "),
+      );
+      if (new Set(normalized).size !== members.length)
+        throw new ApiError(
+          "Há nomes repetidos na lista de integrantes. Informe cada aluno uma vez.",
+        );
       const id = random(),
         key = `films/${u!.id}/${id}.mp4`;
       const upload = await env.BUCKET.createMultipartUpload(key, {
@@ -301,7 +324,7 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
       });
       try {
         const inserted = await env.DB.prepare(
-          "INSERT INTO films (id,userId,title,synopsis,team,category,filename,fingerprint,size,duration,status,objectKey,uploadId,createdAt) SELECT ?,?,?,?,?,?,?,?,?,?, 'uploading',?,?,? WHERE COALESCE((SELECT SUM(size) FROM films WHERE status='ready' OR (status='uploading' AND createdAt>?)),0)+?<=? RETURNING id",
+          "INSERT INTO films (id,userId,title,synopsis,team,members,category,filename,fingerprint,size,duration,status,objectKey,uploadId,createdAt) SELECT ?,?,?,?,?,?,?,?,?,?,?, 'uploading',?,?,? WHERE COALESCE((SELECT SUM(size) FROM films WHERE status='ready' OR (status='uploading' AND createdAt>?)),0)+?<=? RETURNING id",
         )
           .bind(
             id,
@@ -309,6 +332,7 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
             title,
             synopsis,
             team,
+            JSON.stringify(members),
             category,
             filename,
             fingerprint,
@@ -352,6 +376,7 @@ async function handleRequest(req: Request, env: Env): Promise<Response> {
           title: f.title,
           synopsis: f.synopsis,
           team: f.team,
+          members: f.members ? JSON.parse(f.members) : [],
           category: f.category,
           duration: f.duration,
           parts: results,

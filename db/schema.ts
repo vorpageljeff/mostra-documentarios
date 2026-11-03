@@ -29,6 +29,7 @@ export const films = sqliteTable(
     title: text().notNull(),
     synopsis: text().notNull(),
     team: text().notNull(),
+    members: text(),
     category: text().notNull(),
     filename: text().notNull(),
     fingerprint: text().notNull(),
