@@ -101,12 +101,14 @@ async function rate(env: Env, key: string, max: number, window: number) {
     );
 }
 async function user(req: Request, env: Env, required = true) {
-  const token = req.headers
-    .get("cookie")
-    ?.split(";")
-    .map((x) => x.trim())
-    .find((x) => x.startsWith("mostra_session="))
-    ?.slice(15);
+  const token =
+    req.headers.get("authorization")?.match(/^Bearer ([a-f0-9-]{72})$/)?.[1] ||
+    req.headers
+      .get("cookie")
+      ?.split(";")
+      .map((x) => x.trim())
+      .find((x) => x.startsWith("mostra_session="))
+      ?.slice(15);
   if (!token) {
     if (required) throw new ApiError("Entre na sua conta para continuar.", 401);
     return null;
@@ -134,7 +136,17 @@ async function loginResponse(
   )
     .bind(await hash(token), u.id, now() + 2592000)
     .run();
-  return json({ user: u }, 200, { "Set-Cookie": cookie(req, token) });
+  return json(
+    {
+      user: u,
+      ...(req.headers.get("origin") &&
+      req.headers.get("origin") !== new URL(req.url).origin
+        ? { sessionToken: token }
+        : {}),
+    },
+    200,
+    { "Set-Cookie": cookie(req, token) },
+  );
 }
 const publicColumns =
   "f.id,f.title,f.synopsis,f.team,f.category,f.duration,f.size,f.createdAt";
@@ -154,7 +166,7 @@ async function list(env: Env, where = "f.status='ready'", params: any[] = []) {
     .all();
   return results;
 }
-export async function handle(req: Request, env: Env): Promise<Response> {
+async function handleRequest(req: Request, env: Env): Promise<Response> {
   try {
     const path =
       new URL(req.url).pathname.replace(/^\/api/, "").replace(/\/$/, "") || "/";
@@ -162,7 +174,7 @@ export async function handle(req: Request, env: Env): Promise<Response> {
       throw new ApiError("Armazenamento ainda não configurado.", 503);
     if (!["GET", "HEAD"].includes(req.method)) {
       const origin = req.headers.get("origin");
-      if (origin !== new URL(req.url).origin)
+      if (origin !== new URL(req.url).origin && !allowedFrontend(origin))
         throw new ApiError("Origem da requisição inválida.", 403);
     }
     const ip = req.headers.get("cf-connecting-ip") || "local";
@@ -229,9 +241,13 @@ export async function handle(req: Request, env: Env): Promise<Response> {
       });
     }
     if (path === "/logout" && req.method === "POST") {
-      const t = req.headers
-        .get("cookie")
-        ?.match(/(?:^|;\s*)mostra_session=([^;]+)/)?.[1];
+      const t =
+        req.headers
+          .get("authorization")
+          ?.match(/^Bearer ([a-f0-9-]{72})$/)?.[1] ||
+        req.headers
+          .get("cookie")
+          ?.match(/(?:^|;\s*)mostra_session=([^;]+)/)?.[1];
       if (t)
         await env.DB.prepare("DELETE FROM sessions WHERE token=?")
           .bind(await hash(t))
@@ -513,4 +529,42 @@ export async function handle(req: Request, env: Env): Promise<Response> {
     console.error("API error", e instanceof Error ? e.message : "unknown");
     return json({ error: "Não foi possível concluir. Tente novamente." }, 500);
   }
+}
+
+// Explicit origins only: no wildcard subdomains, no credentialed CORS.
+const FRONTEND_ORIGINS = new Set([
+  "https://mostra-donaduzzi.vercel.app",
+  "http://127.0.0.1:5184",
+]);
+function allowedFrontend(origin: string | null) {
+  return !!origin && FRONTEND_ORIGINS.has(origin);
+}
+export async function handle(req: Request, env: Env): Promise<Response> {
+  const origin = req.headers.get("origin");
+  const cross = !!origin && origin !== new URL(req.url).origin;
+  if (cross && !allowedFrontend(origin))
+    return json({ error: "Origem da requisição inválida." }, 403);
+  if (req.method === "OPTIONS") {
+    if (!allowedFrontend(origin))
+      return json({ error: "Origem da requisição inválida." }, 403);
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": origin!,
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,Authorization",
+        "Access-Control-Max-Age": "600",
+        Vary: "Origin",
+      },
+    });
+  }
+  const response = await handleRequest(req, env);
+  if (cross && allowedFrontend(origin)) {
+    const h = new Headers(response.headers);
+    h.set("Access-Control-Allow-Origin", origin!);
+    h.append("Vary", "Origin");
+    h.delete("Set-Cookie");
+    return new Response(response.body, { status: response.status, headers: h });
+  }
+  return response;
 }

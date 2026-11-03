@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
 export const metadata: Metadata = {
-  title: "Mostra — Documentários em foco",
+  title: "Mostra de Documentários | Faculdade Donaduzzi",
   icons: { icon: "/favicon.svg" },
   description:
-    "Histórias que merecem uma tela. Inscreva seu documentário, assista às produções e participe da avaliação.",
+    "Documentários dos alunos da disciplina Profissional de TI e o Mercado de Trabalho, da Faculdade Donaduzzi. Inscreva seu filme, assista e avalie.",
 };
 export default function RootLayout({
   children,

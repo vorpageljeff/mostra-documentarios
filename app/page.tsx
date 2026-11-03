@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { apiBase, sessionToken, saveSession } from "../lib/api-client";
 
 type User = { id: string; name: string; email: string };
 type Film = {
@@ -47,12 +48,16 @@ type ApiResponse = {
   category: string;
   duration: number;
   error?: string;
+  sessionToken?: string;
 };
 async function api(path: string, options: RequestInit = {}) {
-  const r = await fetch("/api" + path, {
-    credentials: "same-origin",
+  const r = await fetch(apiBase() + "/api" + path, {
+    credentials: apiBase() ? "omit" : "same-origin",
     ...options,
     headers: {
+      ...(apiBase() && sessionToken()
+        ? { Authorization: "Bearer " + sessionToken() }
+        : {}),
       ...(options.body && typeof options.body === "string"
         ? { "Content-Type": "application/json" }
         : {}),
@@ -61,6 +66,8 @@ async function api(path: string, options: RequestInit = {}) {
   });
   const data = (await r.json()) as ApiResponse;
   if (!r.ok) throw new Error(data.error || "Não foi possível concluir.");
+  if (apiBase() && data.sessionToken) saveSession(data.sessionToken);
+  if (path === "/logout") saveSession(null);
   return data;
 }
 function Icon({ name, size: s = 20 }: { name: string; size?: number }) {
@@ -554,10 +561,18 @@ export default function Home() {
             navigate("catalog");
           }}
         >
-          <span className="brand-mark">
-            <Icon name="play" size={23} />
+          <img
+            className="faculty-logo"
+            src="/donaduzzi-logo.png"
+            alt="Faculdade Donaduzzi"
+            width="200"
+            height="56"
+          />
+          <span className="brand-project">
+            MOSTRA
+            <br />
+            DOCUMENTÁRIOS
           </span>
-          mostra<span className="brand-dot">.</span>
         </a>
         <nav aria-label="Navegação principal">
           <button
@@ -623,16 +638,18 @@ export default function Home() {
             <section className="hero">
               <div className="hero-copy">
                 <div className="eyebrow">
-                  <span className="live-dot" /> INSCRIÇÕES ABERTAS
+                  <span className="live-dot" /> FACULDADE DONADUZZI · INSCRIÇÕES
+                  ABERTAS
                 </div>
                 <h1>
-                  Histórias que
+                  Profissional de TI.
                   <br />
-                  merecem <em>uma tela.</em>
+                  <em>Novos olhares.</em>
                 </h1>
                 <p>
-                  Um espaço para novos olhares. Publique seu documentário,
-                  descubra produções dos alunos e faça parte da avaliação.
+                  Mostra de documentários dos alunos da Faculdade Donaduzzi, na
+                  disciplina Profissional de TI e o Mercado de Trabalho. Assista
+                  às produções e participe da avaliação.
                 </p>
                 <div className="hero-actions">
                   <button
@@ -657,7 +674,7 @@ export default function Home() {
                     <Icon name="film" size={19} />
                   </span>
                   <span>
-                    Da sala de aula para o mundo.
+                    Da sala de aula para o mercado de trabalho.
                     <br />
                     <strong>
                       Assista livremente. Cadastre-se para participar.
@@ -667,7 +684,7 @@ export default function Home() {
               </div>
               <div className="hero-visual">
                 <div className="visual-top">
-                  <span>UM NOVO OLHAR COMEÇA AQUI</span>
+                  <span>PROFISSIONAL DE TI E O MERCADO DE TRABALHO</span>
                   <span>01 — ∞</span>
                 </div>
                 <div className="hero-art">
@@ -1204,10 +1221,16 @@ export default function Home() {
       </main>
       <footer className="footer">
         <a href="/" className="brand">
-          mostra<span className="brand-dot">.</span>
+          <img
+            className="faculty-logo"
+            src="/donaduzzi-logo.png"
+            alt="Faculdade Donaduzzi"
+            width="200"
+            height="56"
+          />
         </a>
-        <p>Histórias reais. Novos olhares.</p>
-        <span>Feito para aprender, compartilhar e inspirar.</span>
+        <p>Faculdade Donaduzzi · Profissional de TI</p>
+        <span>Mostra de documentários dos alunos.</span>
       </footer>
       {notice && (
         <div className="toast" role="status">
@@ -1241,7 +1264,7 @@ export default function Home() {
               controls
               preload="metadata"
               playsInline
-              src={"/api/films/" + selected.film.id + "/media"}
+              src={apiBase() + "/api/films/" + selected.film.id + "/media"}
               onError={() =>
                 setRatingMessage(
                   "Não foi possível reproduzir. Verifique sua conexão e se o vídeo usa H.264/AAC.",

@@ -7,3 +7,4 @@ export function GET(request: Request) {
 export const POST = GET;
 export const PUT = GET;
 export const DELETE = GET;
+export function OPTIONS(request: Request) { return handle(request, env as any); }

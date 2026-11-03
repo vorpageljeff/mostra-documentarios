@@ -217,3 +217,18 @@ console.log(
     2,
   ),
 );
+
+// The Vercel SPA authenticates directly against the backend using a scoped
+// bearer session. No third-party cookies or proxying of MP4 chunks is required.
+const frontendOrigin='https://mostra-donaduzzi.vercel.app';
+const preflight=await fetch(base+'/api/uploads',{method:'OPTIONS',headers:{Origin:frontendOrigin,'Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'content-type,authorization'}});
+assert.equal(preflight.status,204);assert.equal(preflight.headers.get('access-control-allow-origin'),frontendOrigin);
+const registerCross=await fetch(base+'/api/register',{method:'POST',headers:{Origin:frontendOrigin,'Content-Type':'application/json'},body:JSON.stringify({name:'Aluno do frontend Vercel',email:`vercel-${run}@example.invalid`,password:pw})});
+assert.equal(registerCross.status,200);assert.equal(registerCross.headers.get('access-control-allow-origin'),frontendOrigin);assert.equal(registerCross.headers.has('set-cookie'),false);
+const bearer=(await registerCross.json()).sessionToken;assert.ok(bearer);
+const crossHeaders={Origin:frontendOrigin,Authorization:'Bearer '+bearer};
+const crossMe=await fetch(base+'/api/me',{headers:crossHeaders});assert.equal((await crossMe.json()).user.name,'Aluno do frontend Vercel');
+const evil=await fetch(base+'/api/me',{headers:{Origin:'https://mostra-donaduzzi-evil.vercel.app',Authorization:'Bearer '+bearer}});assert.equal(evil.status,403);assert.equal(evil.headers.has('access-control-allow-origin'),false);
+assert.equal((await fetch(base+'/api/logout',{method:'POST',headers:crossHeaders})).status,200);
+const signedOut=await fetch(base+'/api/my-films',{headers:crossHeaders});assert.equal(signedOut.status,401);
+console.log('CORS + sessão bearer + logout + rejeição de origem externa: 6 verificações aprovadas.');
